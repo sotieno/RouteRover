@@ -24,9 +24,8 @@ def establish_database_connection(db_params):
         logging.error(f"Error connecting to the database: {error}")
         raise ConnectionError(f"Error connecting to the database: {error}")
 
+
 # Find the nearest node
-
-
 def find_nearest_node(cursor, geom_point, table_name='ken_2po_4pgr'):
     cursor.execute("""
         SELECT id, ST_AsText(geom_way)
@@ -36,9 +35,8 @@ def find_nearest_node(cursor, geom_point, table_name='ken_2po_4pgr'):
     """.format(table_name), (dumps(geom_point),))
     return cursor.fetchone()
 
+
 # Clean up route text
-
-
 def clean_route_text(route_text):
     route_text = route_text.replace("MULTILINESTRING", "")
     route_text = route_text.replace("((", "")
@@ -48,9 +46,8 @@ def clean_route_text(route_text):
     route_text = route_text.replace(")(", ",")
     return route_text
 
+
 # Function to calculate shortest route
-
-
 def calculate_shortest_route(start_point_geom, end_point_geom, mode_of_travel):
     """
     Calculate the optimized route between two points using pgRouting.
