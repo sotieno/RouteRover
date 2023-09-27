@@ -4,6 +4,7 @@
     Declares application functions
 '''
 import os
+import math
 import logging
 import folium
 import psycopg2
@@ -11,12 +12,13 @@ import osmnx as ox
 import networkx as nx
 from flask.json import dumps
 from geopy.geocoders import Nominatim
+from geopy.distance import geodesic
 from shapely.wkt import dumps
+from shapely.geometry import Point
 from core.extensions import db_params
 
+
 # Get database connection
-
-
 def establish_database_connection(db_params):
     try:
         return psycopg2.connect(**db_params)
@@ -45,6 +47,33 @@ def clean_route_text(route_text):
     route_text = route_text.replace(")", "")
     route_text = route_text.replace(")(", ",")
     return route_text
+
+
+# Calculate the nearest network nodes for start and end points
+def calculate_nearest_nodes(G, start_point_geom, end_point_geom):
+    nearest_start_node = None
+    nearest_end_node = None
+    min_start_distance = float('inf')
+    min_end_distance = float('inf')
+
+    for node in G.nodes():
+        node_coords = (G.nodes[node]['y'], G.nodes[node]['x'])
+        print(node_coords)
+
+        # Calculate distance from start and end points to the current node using geodesic
+        start_distance = geodesic((start_point_geom.x, start_point_geom.y), node_coords).kilometers
+        end_distance = geodesic((end_point_geom.x, end_point_geom.y), node_coords).kilometers
+
+        # Update nearest nodes if a closer node is found
+        if start_distance < min_start_distance:
+            nearest_start_node = node
+            min_start_distance = start_distance
+
+        if end_distance < min_end_distance:
+            nearest_end_node = node
+            min_end_distance = end_distance
+
+    return nearest_start_node, nearest_end_node
 
 
 # Function to calculate shortest route
@@ -80,32 +109,34 @@ def calculate_shortest_route(start_point_geom, end_point_geom, mode_of_travel):
             # Create a NetworkX graph
             G = nx.Graph(graph)
 
-            # Find the nearest nodes
-            nearest_start_node = ox.distance.nearest_nodes(
-                G, start_point_geom.x, start_point_geom.y)
-            nearest_end_node = ox.distance.nearest_nodes(
-                G, end_point_geom.x, end_point_geom.y)
+            print(start_point_geom)
+            print(end_point_geom)
+            print(G.nodes)
 
-            # Find the shortest path
+            # Calculate the nearest nodes
+            nearest_start_node, nearest_end_node = calculate_nearest_nodes(G, start_point_geom, end_point_geom)
+
+            # Find the shortest route
             shortest_route = nx.shortest_path(
                 G, source=nearest_start_node, target=nearest_end_node,
                 weight=optimizer, method='bellman-ford')
+
 
             print("Nearest Start Node:", nearest_start_node)
             print("Nearest End Node:", nearest_end_node)
             print("Shortest Path:", shortest_route)
 
-            if shortest_route[0] != "":
+            if shortest_route != []:
                 # Create a Folium map centered around the start location
-                map_center = [start_point_geom.y, start_point_geom.x]
+                map_center = [start_point_geom.x, start_point_geom.y]
                 shortest_route_map = folium.Map(
                     location=map_center, zoom_start=14)
 
                 # Create markers for start and end locations
                 start_marker = folium.Marker(
-                    [start_point_geom.y, start_point_geom.x], tooltip="Start")
+                    [start_point_geom.x, start_point_geom.y], tooltip="Start")
                 end_marker = folium.Marker(
-                    [end_point_geom.y, end_point_geom.x], tooltip="End")
+                    [end_point_geom.x, end_point_geom.y], tooltip="End")
 
                 # Add markers to the map
                 start_marker.add_to(shortest_route_map)
