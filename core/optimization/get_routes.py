@@ -38,8 +38,8 @@ def get_route():
         end_location = tuple(reversed(geocode_address(end_point_coords)))
 
         # Ensure that the geocoded points are in SRID 4326
-        start_point_geom = Point(start_location)
-        end_point_geom = Point(end_location)
+        start_point_geom = Point(start_location[1], start_location[0])  # Assuming the tuple has (latitude, longitude) order
+        end_point_geom = Point(end_location[1], end_location[0])  # Assuming the tuple has (latitude, longitude) order
 
         if start_point_geom.is_valid and end_point_geom.is_valid:
             # Execute Dijkstra's algorithm using pgrouting
@@ -54,7 +54,7 @@ def get_route():
                 flash('No route found.')
                 return redirect(url_for('route.get_route_form'))
         else:
-            flash('Please a valid start point and destination.')
+            flash('Please enter a valid start point and destination.')
             return redirect(url_for('route.get_route_form'))
 
     except Exception as e:
