@@ -10,6 +10,7 @@ from core.main import main_bp
 from flask import jsonify, request, render_template, redirect, url_for, flash
 from flask_login import login_user, login_required, logout_user
 from core.models.user import User
+from core.utils.functions import is_valid_email, is_valid_password, get_password_requirements
 from werkzeug.security import check_password_hash
 
 
@@ -42,14 +43,18 @@ def signup():
     '''
     This endpoint renders the registration form
     '''
-    return render_template('signup.html')
+    return render_template('signup.html', password_requirements=get_password_requirements())
 
-@auth_bp.route('/signup', methods=['POST'])
+@auth_bp.route('/signup', methods=['POST', 'GET'])
 def signup_user():
     '''
     This endpoint allows users to register with a username,
     email, first_name, last_name and password.
     '''
+
+    # Handle GET request to display the signup form
+    if request.method == 'GET':
+        return render_template('signup.html', password_requirements=get_password_requirements())
 
     # Extract user data from the request
     username = request.form.get("username")
@@ -58,32 +63,40 @@ def signup_user():
     last_name = request.form.get("last_name")
     password = request.form.get("password")
 
-    # Check if the username or email already exists in the database
-    existing_user = User.query.filter_by(username=username).first()
-    existing_email = User.query.filter_by(email=email).first()
+    # Validate email and password
+    if not is_valid_email(email):
+        error_message = 'Invalid email address'
+    elif not is_valid_password(password):
+        error_message = 'Invalid password'
+    else:
+        # Check if the username or email already exists in the database
+        existing_user = User.query.filter_by(username=username).first()
+        existing_email = User.query.filter_by(email=email).first()
 
-    if existing_user:
-        flash('Username already exists')
-        return redirect(url_for('auth.signup'))
-    if existing_email:
-        flash('Email address already exists')
-        return redirect(url_for('auth.signup'))
+        if existing_user:
+            error_message = 'Username already exists'
+        elif existing_email:
+            error_message = 'Email address already exists'
+        else:
+            # Create a new user instance
+            new_user = User(
+                username=username,
+                email=email,
+                first_name=first_name,
+                last_name=last_name,
+                password=password
+            )
 
-    # Create a new user instance
-    new_user = User(
-        username=username,
-        email=email,
-        first_name=first_name,
-        last_name=last_name,
-        password=password
-    )
+            # Add the user to the database
+            from core.extensions import db
+            db.session.add(new_user)
+            db.session.commit()
 
-    # Add the user to the database
-    from core.extensions import db
-    db.session.add(new_user)
-    db.session.commit()
+            return redirect(url_for('auth.login'))
 
-    return redirect(url_for('auth.login'))
+    # If any validation checks fail, render the signup form with error message and password requirements
+    return render_template('signup.html', error=flash(error_message), password_requirements=get_password_requirements())
+
 
 # Logout users
 @auth_bp.route('/logout')
