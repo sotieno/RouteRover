@@ -4,6 +4,7 @@
     Declares application functions
 '''
 import os
+import re
 import math
 import logging
 import folium
@@ -16,6 +17,51 @@ from geopy.distance import geodesic
 from shapely.wkt import dumps
 from shapely.geometry import Point
 from core.extensions import db_params
+
+
+# Checks for a valid email address
+def is_valid_email(email):
+    # Regular expression for email validation (covers most common cases)
+    email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+
+    # Check is email is valid and is less than 320 characters
+    if re.search(email_regex, email) and len(email) <= 320:
+        return True
+    else:
+        return False
+
+
+# Checks if password meets criteria
+def is_valid_password(password):
+    # Password criteria constants
+    MIN_LENGTH = 8
+    HAS_UPPERCASE = lambda s: any(char.isupper() for char in s)
+    HAS_LOWERCASE = lambda s: any(char.islower() for char in s)
+    HAS_DIGIT = lambda s: any(char.isdigit() for char in s)
+    HAS_SPECIAL = lambda s: any(char in "!@#$%^&*()_-+=<>?/[]{}|" for char in s)
+
+    # Check each password criterion
+    return (
+        len(password) >= MIN_LENGTH and
+        HAS_UPPERCASE(password) and
+        HAS_LOWERCASE(password) and
+        HAS_DIGIT(password) and
+        HAS_SPECIAL(password)
+    )
+
+
+# Displays password requirements
+def get_password_requirements():
+    # Define the password requirements and return as a string
+    requirements = [
+        "At least 8 characters",
+        "At least one uppercase letter",
+        "At least one lowercase letter",
+        "At least one digit",
+        "At least one special character (!@#$%^&*()_-+=<>?/[]{}|)",
+    ]
+
+    return ", ".join(requirements)
 
 
 # Get database connection
