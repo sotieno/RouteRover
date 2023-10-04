@@ -1,12 +1,12 @@
 # RouteRover
 
 ## Introduction
-RouteRover is a web application for optimizing and visualizing routes between two points based on mode of travel.
+RouteRover is a web application that allows users to plan routes between two points based on mode of travel.
 
 ## Features
 
-- Calculate the shortest route between two locations.
-- Visualize the optimized route on a map.
+- Calculate the route between two locations.
+- Visualize the route on a map.
 - User-friendly web interface.
 
 ## Getting started
@@ -18,7 +18,7 @@ These instructions will help you set up and run the RouteRover app on your local
 Before you begin, ensure you have met the following requirements:
 
 - Python 3.x installed.
-- PostgreSQL, PostGIS, pgRouting set up with the necessary data.
+- PostgreSQL set up with the necessary data.
 - Flask and required Python packages installed. You can install them using `pip`:
 
 ### Installation
@@ -43,9 +43,8 @@ source virtualenv/scripts/activate # For Windows
 pip install -r requirements.txt
 ```
 
-3. Configure your database connection by modifying 'config.py' with your database parameters.
-4. Create and populate the necessary database tables
-5. Create the flask application factory by running the following commands to run the application:
+3. Create and populate the necessary database tables
+4. Create the flask application factory by running the following commands to run the application:
 
 ```bash
 export FLASK_APP=core
@@ -58,7 +57,7 @@ flask run
 1. Open your web browser and go to http://localhost:5000/main/.
 2. 'Register' or 'Login' to access 'Get Route' function.
 3. Enter the starting point, destination and mode of travel in the input form and click the "Find Route" button.
-4. The shortest route will be displayed on the map along with markers for the starting and ending points.
+4. Your route will be displayed on the map along with markers for the starting and ending points.
 
 ## Contributing
 I welcome contributions from the community. If you would like to contribute to RouteRover, please follow these guidelines:
