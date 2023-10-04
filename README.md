@@ -43,8 +43,19 @@ source virtualenv/scripts/activate # For Windows
 pip install -r requirements.txt
 ```
 
-3. Create and populate the necessary database tables
-4. Create the flask application factory by running the following commands to run the application:
+3. Create a .env file and configure the environmental variables
+
+```
+DB_NAME='database'
+DB_USER='username'
+DB_PASSWORD='password'
+DB_HOST='localhost'
+DB_PORT='5432'
+DB_URL=postgresql://username:password@localhost/database
+```
+
+4. Create and populate the necessary database tables
+5. Create the flask application factory by running the following commands to run the application:
 
 ```bash
 export FLASK_APP=core
@@ -54,10 +65,11 @@ flask run
 
 ## Usage
 
-1. Open your web browser and go to http://localhost:5000/main/.
+1. On your browser, navigate to http://localhost:5000/main/.
 2. 'Register' or 'Login' to access 'Get Route' function.
-3. Enter the starting point, destination and mode of travel in the input form and click the "Find Route" button.
-4. Your route will be displayed on the map along with markers for the starting and ending points.
+3. Submit starting point, destination and select mode of travel in the input form to plan your route
+
+Your route will be displayed on the map along with markers for the starting and ending points.
 
 ## Contributing
 I welcome contributions from the community. If you would like to contribute to RouteRover, please follow these guidelines:
