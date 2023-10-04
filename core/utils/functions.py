@@ -8,6 +8,7 @@ import re
 import math
 import logging
 import folium
+import requests
 import psycopg2
 import osmnx as ox
 import networkx as nx
@@ -18,6 +19,13 @@ from shapely.wkt import dumps
 from shapely.geometry import Point
 from core.extensions import db_params
 
+
+url = "https://valhalla1.openstreetmap.de/route"
+
+headers = {
+    "Content-Type": "application/json",
+    "User-Agent": "insomnia/8.1.0"
+}
 
 # Checks for a valid email address
 def is_valid_email(email):
@@ -104,7 +112,6 @@ def calculate_nearest_nodes(G, start_point_geom, end_point_geom):
 
     for node in G.nodes():
         node_coords = (G.nodes[node]['y'], G.nodes[node]['x'])
-        print(node_coords)
 
         # Calculate distance from start and end points to the current node using geodesic
         start_distance = geodesic((start_point_geom.x, start_point_geom.y), node_coords).kilometers
@@ -125,101 +132,95 @@ def calculate_nearest_nodes(G, start_point_geom, end_point_geom):
 # Function to calculate shortest route
 def calculate_shortest_route(start_point_geom, end_point_geom, mode_of_travel):
     """
-    Calculate the optimized route between two points using pgRouting.
-
-    Args:
-        start_lat (float): Latitude of the starting point.
-        start_lon (float): Longitude of the starting point.
-        end_lat (float): Latitude of the destination point.
-        end_lon (float): Longitude of the destination point.
-        target_srid (str): The target SRID for coordinate transformation.
-
-    Returns:
-        list of tuple: A list of coordinates representing the optimized route.
+    Calculates the route between two points.
     """
 
-    try:
-        # Get database connection
-        conn = establish_database_connection(db_params)
-        with conn.cursor() as cursor:
-            # Define region of interest
-            place_name = "Nairobi, Kenya"
+    # Define coordinate list
+    latlon = [(start_point_geom.y, start_point_geom.x), (end_point_geom.y, end_point_geom.x)]
 
-            # Define weight
-            optimizer = 'time'
+    # Define region of interest
+    place_name = "Nairobi, Kenya"
 
-            # Download OSM data for region of interest
-            graph = ox.graph_from_place(
-                place_name, network_type=mode_of_travel)
+    # Define weight
+    optimizer = 'time'
 
-            # Create a NetworkX graph
-            G = nx.Graph(graph)
+    # Download OSM data for region of interest
+    graph = ox.graph_from_place(
+        place_name, network_type=mode_of_travel)
 
-            print(start_point_geom)
-            print(end_point_geom)
-            print(G.nodes)
+    # Create a NetworkX graph
+    G = nx.Graph(graph)
 
-            # Calculate the nearest nodes
-            nearest_start_node, nearest_end_node = calculate_nearest_nodes(G, start_point_geom, end_point_geom)
+    # Calculate the nearest nodes
+    nearest_start_node, nearest_end_node = calculate_nearest_nodes(G, start_point_geom, end_point_geom)
 
-            # Find the shortest route
-            shortest_route = nx.shortest_path(
-                G, source=nearest_start_node, target=nearest_end_node,
-                weight=optimizer, method='bellman-ford')
+    # Find the shortest route
+    shortest_route = nx.shortest_path(
+        G, source=nearest_start_node, target=nearest_end_node,
+        weight=optimizer, method='bellman-ford')
 
+    if shortest_route != []:
+        # Create a Folium map centered around the start location
+        map_center = [start_point_geom.x, start_point_geom.y]
+        shortest_route_map = folium.Map(
+            location=map_center, zoom_start=14)
 
-            print("Nearest Start Node:", nearest_start_node)
-            print("Nearest End Node:", nearest_end_node)
-            print("Shortest Path:", shortest_route)
+        # Create markers for start and end locations
+        start_marker = folium.Marker(
+            [start_point_geom.x, start_point_geom.y], tooltip="Start")
+        end_marker = folium.Marker(
+            [end_point_geom.x, end_point_geom.y], tooltip="End")
 
-            if shortest_route != []:
-                # Create a Folium map centered around the start location
-                map_center = [start_point_geom.x, start_point_geom.y]
-                shortest_route_map = folium.Map(
-                    location=map_center, zoom_start=14)
+        # Add markers to the map
+        start_marker.add_to(shortest_route_map)
+        end_marker.add_to(shortest_route_map)
 
-                # Create markers for start and end locations
-                start_marker = folium.Marker(
-                    [start_point_geom.x, start_point_geom.y], tooltip="Start")
-                end_marker = folium.Marker(
-                    [end_point_geom.x, end_point_geom.y], tooltip="End")
+        payload = {
+            "locations": [
+                {
+                    "lat": latlon[0][1],
+                    "lon": latlon[0][0]
+                },
+                {
+                    "lat": latlon[1][1],
+                    "lon": latlon[1][0]
+                }
+            ],
+            "costing": "auto"
+        }
 
-                # Add markers to the map
-                start_marker.add_to(shortest_route_map)
-                end_marker.add_to(shortest_route_map)
+        # Send an HTTP GET request to the routing service then parse the
+        # response as JSON and store it in the 'response' variable.
+        response = requests.get('https://valhalla1.openstreetmap.de/route', json=payload, headers=headers).json()
 
-                # Create a list of coordinates for the polyline
-                polyline_coords = [(G.nodes[node]['y'], G.nodes[node]['x'])
-                                   for node in shortest_route]
+        # Decode the coordinates of the route obtained in the JSON response.
+        route = [ list(reversed(point)) for point in decode(response['trip']['legs'][0]['shape'])]
 
-                # Create a polyline
-                polyline = folium.PolyLine(
-                    locations=polyline_coords, color='blue')
+        # Extract maneuver instructions for the route from the JSON response.
+        instructions = [maneuvers['instruction'] for maneuvers in response['trip']['legs'][0]['maneuvers']]
 
-                # Add the polyline to the map
-                polyline.add_to(shortest_route_map)
+        # Add the polyline to the map
+        folium.PolyLine(route,
+                        color='blue',
+                        weight=5,
+                        opacity=0.6).add_to(shortest_route_map)
 
-                # Get the current directory
-                script_dir = os.path.dirname(__file__)
+        shortest_route_map.fit_bounds(shortest_route_map.get_bounds())
 
-                # Specify the file name (e.g., 'shortest_path_map.html')
-                file_name = 'shortest_route_map.html'
+        # Get the current directory
+        script_dir = os.path.dirname(__file__)
 
-                # Save the map to the specified directory
-                shortest_route_map.save(os.path.join(
-                    script_dir, '..', 'templates', file_name))
+        # Specify the file name (e.g., 'shortest_path_map.html')
+        file_name = 'shortest_route_map.html'
 
-                return 'shortest_route_map.html'
-            else:
-                # Return empty list if no path is found
-                return []
-    except psycopg2.Error as error:
-        # Handle database errors
-        logging.error(f"Database error: {error}")
-        raise ConnectionError(f"Database error: {error}")
-    except Exception as error:
-        logging.error(f"An error occurred: {error}")
-        raise RuntimeError(f"An error occurred: {error}")
+        # Save the map to the specified directory
+        shortest_route_map.save(os.path.join(
+            script_dir, '..', 'templates', file_name))
+
+        return 'shortest_route_map.html'
+    else:
+        # Return empty list if no path is found
+        return []
 
 
 # Function to return address geocode
@@ -233,3 +234,54 @@ def geocode_address(address):
         return (location.latitude, location.longitude)
     else:
         return None
+
+
+# Function to decode an encoded set of geocoordinates
+def decode(encoded):
+    # Define the inverse scaling factor for precision (1 divided by 1e6)
+    inv = 1.0 / 1e6
+
+    # Initialize an empty list to store decoded coordinates
+    decoded = []
+
+    # Initialize the previous coordinate values
+    previous = [0, 0]
+
+    # Initialize the index for iterating through the encoded data
+    i = 0
+
+    # Iterate through each byte in the encoded data
+    while i < len(encoded):
+        # Initialize a list to store longitude and latitude values
+        ll = [0, 0]
+
+        # Iterate for longitude (index 0) and latitude (index 1)
+        for j in [0, 1]:
+            shift = 0
+            byte = 0x20
+
+            # Continue decoding bytes until a complete coordinate is obtained
+            while byte >= 0x20:
+                # Decode the current byte
+                byte = ord(encoded[i]) - 63
+                i += 1
+
+                # Extract and store coordinate bits
+                ll[j] |= (byte & 0x1f) << shift
+                shift += 5
+
+            # Calculate the final value by adding the previous offset
+            # and remember it for the next coordinate
+            if ll[j] & 1:
+                ll[j] = previous[j] + (~(ll[j] >> 1))
+            else:
+                ll[j] = previous[j] + (ll[j] >> 1)
+
+            # Update the previous coordinate value for the next iteration
+            previous[j] = ll[j]
+
+        # Scale the coordinates by the precision factor and format as lon, lat
+        decoded.append([float('%.6f' % (ll[1] * inv)), float('%.6f' % (ll[0] * inv))])
+
+    # Return the list of decoded coordinates
+    return decoded
